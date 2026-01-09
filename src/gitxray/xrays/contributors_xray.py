@@ -1,8 +1,200 @@
 from gitxray.include import gh_time, gh_public_events, gx_definitions
-from gitxray.include import gx_ugly_openpgp_parser, gx_ugly_ssh_parser 
+from gitxray.include import gx_ugly_openpgp_parser, gx_ugly_ssh_parser
 from datetime import datetime, timezone
 from collections import defaultdict
 import sys, re, base64
+
+def infer_timezone_from_location(location_str):
+    """Try to infer timezone from location field (best effort)"""
+    if not location_str:
+        return None
+
+    location_lower = location_str.lower()
+
+    # Direct timezone mentions
+    if 'utc' in location_lower or 'gmt' in location_lower:
+        match = re.search(r'utc([+-]\d+)|gmt([+-]\d+)', location_lower)
+        if match:
+            offset = match.group(1) or match.group(2)
+            return f"UTC{offset}"
+
+    # Countries and major cities with their timezones
+    location_timezones = {
+        # North America
+        'usa': 'UTC-5', 'united states': 'UTC-5', 'america': 'UTC-5',
+        'california': 'UTC-8', 'san francisco': 'UTC-8', 'sf': 'UTC-8', 'los angeles': 'UTC-8', 'seattle': 'UTC-8', 'portland': 'UTC-8', 'san diego': 'UTC-8',
+        'new york': 'UTC-5', 'nyc': 'UTC-5', 'boston': 'UTC-5', 'washington': 'UTC-5', 'miami': 'UTC-5', 'atlanta': 'UTC-5', 'philadelphia': 'UTC-5',
+        'chicago': 'UTC-6', 'austin': 'UTC-6', 'dallas': 'UTC-6', 'houston': 'UTC-6',
+        'denver': 'UTC-7', 'phoenix': 'UTC-7', 'salt lake city': 'UTC-7',
+        'canada': 'UTC-5', 'toronto': 'UTC-5', 'montreal': 'UTC-5', 'vancouver': 'UTC-8', 'ottawa': 'UTC-5', 'calgary': 'UTC-7',
+        'mexico': 'UTC-6', 'mexico city': 'UTC-6', 'guadalajara': 'UTC-6', 'monterrey': 'UTC-6',
+
+        # Central America & Caribbean
+        'guatemala': 'UTC-6', 'honduras': 'UTC-6', 'el salvador': 'UTC-6', 'nicaragua': 'UTC-6',
+        'costa rica': 'UTC-6', 'panama': 'UTC-5', 'belize': 'UTC-6',
+        'cuba': 'UTC-5', 'havana': 'UTC-5', 'jamaica': 'UTC-5', 'haiti': 'UTC-5',
+        'dominican republic': 'UTC-4', 'puerto rico': 'UTC-4', 'trinidad': 'UTC-4',
+
+        # South America
+        'colombia': 'UTC-5', 'bogotá': 'UTC-5', 'bogota': 'UTC-5', 'medellín': 'UTC-5', 'medellin': 'UTC-5', 'cali': 'UTC-5',
+        'venezuela': 'UTC-4', 'caracas': 'UTC-4',
+        'ecuador': 'UTC-5', 'quito': 'UTC-5', 'guayaquil': 'UTC-5',
+        'peru': 'UTC-5', 'lima': 'UTC-5',
+        'bolivia': 'UTC-4', 'la paz': 'UTC-4',
+        'chile': 'UTC-4', 'santiago': 'UTC-4',
+        'argentina': 'UTC-3', 'buenos aires': 'UTC-3', 'córdoba': 'UTC-3', 'cordoba': 'UTC-3',
+        'uruguay': 'UTC-3', 'montevideo': 'UTC-3',
+        'paraguay': 'UTC-4', 'asunción': 'UTC-4', 'asuncion': 'UTC-4',
+        'brazil': 'UTC-3', 'brasil': 'UTC-3', 'são paulo': 'UTC-3', 'sao paulo': 'UTC-3', 'rio': 'UTC-3', 'rio de janeiro': 'UTC-3', 'brasília': 'UTC-3', 'brasilia': 'UTC-3',
+        'guyana': 'UTC-4', 'suriname': 'UTC-3',
+
+        # Western Europe
+        'uk': 'UTC+0', 'united kingdom': 'UTC+0', 'england': 'UTC+0', 'london': 'UTC+0', 'manchester': 'UTC+0', 'edinburgh': 'UTC+0', 'scotland': 'UTC+0', 'wales': 'UTC+0',
+        'ireland': 'UTC+0', 'dublin': 'UTC+0',
+        'portugal': 'UTC+0', 'lisbon': 'UTC+0', 'porto': 'UTC+0',
+        'spain': 'UTC+1', 'madrid': 'UTC+1', 'barcelona': 'UTC+1', 'valencia': 'UTC+1', 'seville': 'UTC+1',
+        'france': 'UTC+1', 'paris': 'UTC+1', 'lyon': 'UTC+1', 'marseille': 'UTC+1',
+        'belgium': 'UTC+1', 'brussels': 'UTC+1', 'antwerp': 'UTC+1',
+        'netherlands': 'UTC+1', 'holland': 'UTC+1', 'amsterdam': 'UTC+1', 'rotterdam': 'UTC+1', 'the hague': 'UTC+1',
+        'luxembourg': 'UTC+1',
+        'switzerland': 'UTC+1', 'zurich': 'UTC+1', 'geneva': 'UTC+1', 'bern': 'UTC+1',
+
+        # Central Europe
+        'germany': 'UTC+1', 'deutschland': 'UTC+1', 'berlin': 'UTC+1', 'munich': 'UTC+1', 'frankfurt': 'UTC+1', 'hamburg': 'UTC+1', 'cologne': 'UTC+1',
+        'austria': 'UTC+1', 'vienna': 'UTC+1', 'wien': 'UTC+1',
+        'italy': 'UTC+1', 'rome': 'UTC+1', 'milan': 'UTC+1', 'naples': 'UTC+1', 'turin': 'UTC+1',
+        'poland': 'UTC+1', 'warsaw': 'UTC+1', 'krakow': 'UTC+1', 'wroclaw': 'UTC+1',
+        'czech republic': 'UTC+1', 'czechia': 'UTC+1', 'prague': 'UTC+1',
+        'slovakia': 'UTC+1', 'bratislava': 'UTC+1',
+        'hungary': 'UTC+1', 'budapest': 'UTC+1',
+        'slovenia': 'UTC+1', 'ljubljana': 'UTC+1',
+        'croatia': 'UTC+1', 'zagreb': 'UTC+1',
+
+        # Nordic Countries
+        'norway': 'UTC+1', 'oslo': 'UTC+1',
+        'sweden': 'UTC+1', 'stockholm': 'UTC+1', 'göteborg': 'UTC+1', 'goteborg': 'UTC+1',
+        'finland': 'UTC+2', 'helsinki': 'UTC+2',
+        'denmark': 'UTC+1', 'copenhagen': 'UTC+1',
+        'iceland': 'UTC+0', 'reykjavik': 'UTC+0',
+
+        # Eastern Europe
+        'greece': 'UTC+2', 'athens': 'UTC+2',
+        'romania': 'UTC+2', 'bucharest': 'UTC+2',
+        'bulgaria': 'UTC+2', 'sofia': 'UTC+2',
+        'ukraine': 'UTC+2', 'kyiv': 'UTC+2', 'kiev': 'UTC+2', 'kharkiv': 'UTC+2', 'odesa': 'UTC+2',
+        'belarus': 'UTC+3', 'minsk': 'UTC+3',
+        'estonia': 'UTC+2', 'tallinn': 'UTC+2',
+        'latvia': 'UTC+2', 'riga': 'UTC+2',
+        'lithuania': 'UTC+2', 'vilnius': 'UTC+2',
+        'serbia': 'UTC+1', 'belgrade': 'UTC+1',
+        'bosnia': 'UTC+1', 'sarajevo': 'UTC+1',
+        'albania': 'UTC+1', 'tirana': 'UTC+1',
+
+        # Russia & Central Asia
+        'russia': 'UTC+3', 'moscow': 'UTC+3', 'st petersburg': 'UTC+3', 'saint petersburg': 'UTC+3',
+        'kazakhstan': 'UTC+6', 'almaty': 'UTC+6',
+        'uzbekistan': 'UTC+5', 'tashkent': 'UTC+5',
+        'turkmenistan': 'UTC+5', 'kyrgyzstan': 'UTC+6', 'tajikistan': 'UTC+5',
+
+        # Middle East
+        'turkey': 'UTC+3', 'türkiye': 'UTC+3', 'istanbul': 'UTC+3', 'ankara': 'UTC+3',
+        'israel': 'UTC+2', 'tel aviv': 'UTC+2', 'jerusalem': 'UTC+2',
+        'saudi arabia': 'UTC+3', 'riyadh': 'UTC+3', 'jeddah': 'UTC+3',
+        'uae': 'UTC+4', 'dubai': 'UTC+4', 'abu dhabi': 'UTC+4',
+        'qatar': 'UTC+3', 'doha': 'UTC+3',
+        'kuwait': 'UTC+3',
+        'bahrain': 'UTC+3',
+        'oman': 'UTC+4',
+        'iran': 'UTC+3.5', 'tehran': 'UTC+3.5',
+        'iraq': 'UTC+3', 'baghdad': 'UTC+3',
+        'jordan': 'UTC+2', 'amman': 'UTC+2',
+        'lebanon': 'UTC+2', 'beirut': 'UTC+2',
+        'syria': 'UTC+2', 'damascus': 'UTC+2',
+
+        # South Asia
+        'india': 'UTC+5.5', 'bharat': 'UTC+5.5', 'mumbai': 'UTC+5.5', 'delhi': 'UTC+5.5', 'bangalore': 'UTC+5.5', 'bengaluru': 'UTC+5.5', 'hyderabad': 'UTC+5.5', 'chennai': 'UTC+5.5', 'kolkata': 'UTC+5.5', 'pune': 'UTC+5.5',
+        'pakistan': 'UTC+5', 'karachi': 'UTC+5', 'lahore': 'UTC+5', 'islamabad': 'UTC+5',
+        'bangladesh': 'UTC+6', 'dhaka': 'UTC+6',
+        'sri lanka': 'UTC+5.5', 'colombo': 'UTC+5.5',
+        'nepal': 'UTC+5.75', 'kathmandu': 'UTC+5.75',
+        'afghanistan': 'UTC+4.5', 'kabul': 'UTC+4.5',
+
+        # Southeast Asia
+        'thailand': 'UTC+7', 'bangkok': 'UTC+7',
+        'vietnam': 'UTC+7', 'hanoi': 'UTC+7', 'ho chi minh': 'UTC+7',
+        'philippines': 'UTC+8', 'manila': 'UTC+8',
+        'indonesia': 'UTC+7', 'jakarta': 'UTC+7', 'bali': 'UTC+8',
+        'malaysia': 'UTC+8', 'kuala lumpur': 'UTC+8',
+        'singapore': 'UTC+8',
+        'myanmar': 'UTC+6.5', 'burma': 'UTC+6.5', 'yangon': 'UTC+6.5',
+        'cambodia': 'UTC+7', 'phnom penh': 'UTC+7',
+        'laos': 'UTC+7', 'vientiane': 'UTC+7',
+
+        # East Asia
+        'china': 'UTC+8', 'beijing': 'UTC+8', 'shanghai': 'UTC+8', 'guangzhou': 'UTC+8', 'shenzhen': 'UTC+8', 'chengdu': 'UTC+8',
+        'japan': 'UTC+9', 'tokyo': 'UTC+9', 'osaka': 'UTC+9', 'kyoto': 'UTC+9', 'yokohama': 'UTC+9',
+        'korea': 'UTC+9', 'south korea': 'UTC+9', 'seoul': 'UTC+9', 'busan': 'UTC+9',
+        'north korea': 'UTC+9', 'pyongyang': 'UTC+9',
+        'taiwan': 'UTC+8', 'taipei': 'UTC+8',
+        'hong kong': 'UTC+8', 'hk': 'UTC+8',
+        'macau': 'UTC+8', 'macao': 'UTC+8',
+        'mongolia': 'UTC+8', 'ulaanbaatar': 'UTC+8',
+
+        # Africa - North
+        'egypt': 'UTC+2', 'cairo': 'UTC+2', 'alexandria': 'UTC+2',
+        'morocco': 'UTC+0', 'casablanca': 'UTC+0', 'rabat': 'UTC+0',
+        'algeria': 'UTC+1', 'algiers': 'UTC+1',
+        'tunisia': 'UTC+1', 'tunis': 'UTC+1',
+        'libya': 'UTC+2', 'tripoli': 'UTC+2',
+
+        # Africa - West
+        'nigeria': 'UTC+1', 'lagos': 'UTC+1', 'abuja': 'UTC+1',
+        'ghana': 'UTC+0', 'accra': 'UTC+0',
+        'senegal': 'UTC+0', 'dakar': 'UTC+0',
+        'ivory coast': 'UTC+0', 'côte d\'ivoire': 'UTC+0', 'abidjan': 'UTC+0',
+        'cameroon': 'UTC+1', 'yaoundé': 'UTC+1', 'yaounde': 'UTC+1',
+        'mali': 'UTC+0', 'bamako': 'UTC+0',
+        'burkina faso': 'UTC+0',
+        'niger': 'UTC+1',
+        'benin': 'UTC+1',
+        'togo': 'UTC+0',
+
+        # Africa - East
+        'kenya': 'UTC+3', 'nairobi': 'UTC+3',
+        'ethiopia': 'UTC+3', 'addis ababa': 'UTC+3',
+        'tanzania': 'UTC+3', 'dar es salaam': 'UTC+3',
+        'uganda': 'UTC+3', 'kampala': 'UTC+3',
+        'somalia': 'UTC+3', 'mogadishu': 'UTC+3',
+        'rwanda': 'UTC+2', 'kigali': 'UTC+2',
+        'burundi': 'UTC+2',
+
+        # Africa - Southern
+        'south africa': 'UTC+2', 'johannesburg': 'UTC+2', 'cape town': 'UTC+2', 'pretoria': 'UTC+2', 'durban': 'UTC+2',
+        'zimbabwe': 'UTC+2', 'harare': 'UTC+2',
+        'botswana': 'UTC+2', 'gaborone': 'UTC+2',
+        'namibia': 'UTC+2', 'windhoek': 'UTC+2',
+        'mozambique': 'UTC+2', 'maputo': 'UTC+2',
+        'zambia': 'UTC+2', 'lusaka': 'UTC+2',
+        'malawi': 'UTC+2',
+
+        # Africa - Central
+        'congo': 'UTC+1', 'drc': 'UTC+1', 'kinshasa': 'UTC+1',
+        'angola': 'UTC+1', 'luanda': 'UTC+1',
+        'chad': 'UTC+1',
+        'gabon': 'UTC+1',
+
+        # Oceania
+        'australia': 'UTC+10', 'sydney': 'UTC+10', 'melbourne': 'UTC+10', 'brisbane': 'UTC+10', 'perth': 'UTC+8', 'adelaide': 'UTC+9.5',
+        'new zealand': 'UTC+12', 'nz': 'UTC+12', 'auckland': 'UTC+12', 'wellington': 'UTC+12',
+        'fiji': 'UTC+12',
+        'papua new guinea': 'UTC+10',
+    }
+
+    for location, tz in location_timezones.items():
+        if location in location_lower:
+            return tz
+
+    return None
 
 def run(gx_context, gx_output, gh_api):
 
@@ -138,6 +330,9 @@ def run(gx_context, gx_output, gh_api):
         dates_mismatch_commits_account = []
         dates_mismatch_commits_repository  = []
         commit_times = defaultdict(int)
+        weekday_commits = defaultdict(int)  # 0=Monday, 6=Sunday
+        weekend_commits = 0
+        weekday_only_commits = 0
         gx_output.stdout(f"\r[{c_users_index}/{len(c_users)}] Analyzing {len(commits)} commits and any signing keys for {contributor.get('login')}"+' '*40, end = '', flush=True)
         for commit in commits:
             c = commit["commit"]
@@ -177,10 +372,36 @@ def run(gx_context, gx_output, gh_api):
                     gx_output.c_log(f"The signature was malformed and a parsing error took place: {commit['html_url']}", rtype="signatures")
                 failed_verifications.append(c)
 
-            if c["author"]["email"] not in contributor_emails: 
-                gx_output.c_log(f"[{c['author']['email']}] obtained by parsing commits.", rtype="emails")
-                contributor_emails.append(c["author"]["email"]) 
+            if c["author"]["email"] not in contributor_emails:
+                gx_output.c_log(f"[{c['author']['email']}] obtained from commit author field.", rtype="emails")
+                contributor_emails.append(c["author"]["email"])
                 gx_context.linkIdentifier("EMAIL", [c["author"]["email"]], contributor_login)
+
+            # Extract co-authors from commit message
+            commit_message = c.get('message', '')
+            coauthor_pattern = r'Co-authored-by:\s*([^<]+?)\s*<([^>]+)>'
+            coauthors = re.findall(coauthor_pattern, commit_message, re.IGNORECASE)
+
+            if len(coauthors) > 0:
+                for coauthor_name, coauthor_email in coauthors:
+                    coauthor_name = coauthor_name.strip()
+                    coauthor_email = coauthor_email.strip()
+
+                    # Track co-author email
+                    if coauthor_email not in contributor_emails:
+                        gx_output.c_log(f"[{coauthor_email}] obtained from Co-authored-by in commit message.", rtype="emails", contributor=contributor_login)
+                        contributor_emails.append(coauthor_email)
+                        gx_context.linkIdentifier("EMAIL", [coauthor_email], contributor_login)
+
+                    gx_output.c_log(f"Commit co-authored with [{coauthor_name} <{coauthor_email}>]: {commit['html_url']}", rtype="commits", contributor=contributor_login)
+
+                    # Link co-author name and email for pattern detection
+                    gx_context.linkIdentifier("COAUTHOR_EMAIL", [coauthor_email], contributor_login)
+                    gx_context.linkIdentifier("COAUTHOR_NAME", [coauthor_name], contributor_login)
+
+                    # Create a pair identifier to find shared co-authorship relationships
+                    coauthor_pair = tuple(sorted([contributor_login, coauthor_email]))
+                    gx_context.linkIdentifier("COAUTHOR_PAIR", [f"{coauthor_pair[0]}+{coauthor_pair[1]}"], contributor_login)
 
             commit_date = gh_time.parse_date(c['author']['date'])
             if commit_date < contributor_created_at_time:
@@ -191,6 +412,14 @@ def run(gx_context, gx_output, gh_api):
 
             # Let's group by commit hour, we may have an insight here.
             commit_times[commit_date.hour] += 1
+
+            # Track weekday patterns for temporal analysis
+            day_of_week = commit_date.weekday()  # 0=Monday, 6=Sunday
+            weekday_commits[day_of_week] += 1
+            if day_of_week >= 5:  # Saturday or Sunday
+                weekend_commits += 1
+            else:
+                weekday_only_commits += 1
 
         if len(dates_mismatch_commits_account) > 0:
             gx_output.c_log(f"WARNING: UNRELIABLE COMMIT DATES (Older than Account, which was created on {contributor.get('created_at')}) in {len(dates_mismatch_commits_account)} commits by [{contributor_login}]. Potential tampering, account re-use, or Rebase. List at: {repository.get('html_url')}/commits/?author={contributor_login}&until={contributor.get('created_at')}", rtype="commits")
@@ -216,8 +445,81 @@ def run(gx_context, gx_output, gh_api):
 
             gx_output.c_log(formatted_output, rtype="commits")
 
+        # Temporal pattern analysis
+        total_commits_for_user = len(commits)
+        if total_commits_for_user > 0:
+            # Analyze weekday/weekend patterns
+            weekend_percentage = (weekend_commits / total_commits_for_user) * 100
+            weekday_percentage = (weekday_only_commits / total_commits_for_user) * 100
+
+            if weekend_percentage > 80 and total_commits_for_user >= 20:
+                gx_output.c_log(f"Commit timing: {weekend_percentage:.1f}% of commits occur on weekends (outside typical work days).", rtype="commits")
+                gx_context.linkIdentifier("COMMIT_PATTERN", ["weekend_focused"], contributor_login)
+            elif weekday_percentage > 90 and total_commits_for_user >= 20:
+                gx_output.c_log(f"Commit timing: {weekday_percentage:.1f}% of commits occur Mon-Fri (during typical work days).", rtype="commits")
+                gx_context.linkIdentifier("COMMIT_PATTERN", ["weekday_focused"], contributor_login)
+
+            # Detect unusual 24/7 commit distribution (potential bot activity)
+            active_hours = len([hour for hour, count in commit_times.items() if count > 0])
+            if active_hours >= 22:
+                gx_output.c_log(f"WARNING: Unusual commit distribution for [{contributor_login}] - commits spread across {active_hours} different hours of the day (potential automated activity). Review hourly breakdown in commits section.", rtype="commits", contributor=contributor_login)
+                gx_context.linkIdentifier("SUSPICIOUS_24_7_ACTIVITY", [active_hours], contributor_login)
+
+            # Find primary active hours (8-hour window with most commits)
+            max_window_commits = 0
+            primary_window_start = 0
+
+            for start_hour in range(24):
+                window_commits = sum(commit_times.get((start_hour + i) % 24, 0) for i in range(8))
+                if window_commits > max_window_commits:
+                    max_window_commits = window_commits
+                    primary_window_start = start_hour
+
+            primary_window_label = f"{primary_window_start:02d}:00-{(primary_window_start+8)%24:02d}:00 UTC"
+            gx_context.linkIdentifier("PRIMARY_ACTIVE_HOURS", [primary_window_label], contributor_login)
+
+            # Location-based timezone analysis
+            profile_location = contributor.get('location', '')
+            inferred_tz = None
+            if profile_location:
+                inferred_tz = infer_timezone_from_location(profile_location)
+                if inferred_tz:
+                    gx_output.c_log(f"Profile location [{profile_location}] suggests timezone: {inferred_tz}", rtype="profiling")
+                    gx_context.linkIdentifier("INFERRED_TIMEZONE", [inferred_tz], contributor_login)
+
+                    # Convert UTC commit window to local time and analyze
+                    try:
+                        # Parse timezone offset (e.g., "UTC-5" -> -5, "UTC+5.5" -> 5.5)
+                        tz_offset = float(inferred_tz.replace('UTC', ''))
+
+                        # Convert primary window start from UTC to local time
+                        local_start = (primary_window_start + tz_offset) % 24
+                        local_end = (local_start + 8) % 24
+
+                        # Determine if local hours indicate normal or unusual activity
+                        # Check both start and end times of the 8-hour window
+                        # Work hours: roughly 6am-8pm (6:00-20:00)
+                        # Evening: 8pm-10pm (20:00-22:00)
+                        # Night: 10pm-6am (22:00-6:00)
+
+                        if 22 <= local_start or local_start < 6:  # Starts during night (10pm-6am)
+                            gx_output.c_log(f"Profile location [{profile_location}] suggests {inferred_tz}, but primary activity window ({int(local_start)}:00-{int(local_end)}:00 {inferred_tz}) indicates night-time commits. Location may not match actual timezone or contributor works unusual hours.", rtype="commits")
+                        elif local_end >= 22 or local_start > local_end:  # Extends to/past 10pm or wraps past midnight
+                            gx_output.c_log(f"Profile location [{profile_location}] suggests {inferred_tz}. Primary activity window ({int(local_start)}:00-{int(local_end)}:00 {inferred_tz}) includes evening/late night hours.", rtype="commits")
+                        elif local_end > 20:  # Extends past 8pm but before 10pm
+                            gx_output.c_log(f"Profile location [{profile_location}] suggests {inferred_tz}. Primary activity window ({int(local_start)}:00-{int(local_end)}:00 {inferred_tz}) includes evening hours.", rtype="commits")
+                        else:  # Window is mostly within typical work hours (6am-8pm)
+                            gx_output.c_log(f"Profile location [{profile_location}] suggests {inferred_tz}. Primary activity window ({int(local_start)}:00-{int(local_end)}:00 {inferred_tz}) aligns with typical work hours.", rtype="commits")
+                    except (ValueError, AttributeError):
+                        # If timezone parsing fails, skip analysis
+                        pass
+
+            # Only show UTC window if no timezone was inferred
+            if not inferred_tz:
+                gx_output.c_log(f"Primary commit window: {primary_window_label} (8-hour period with most commits)", rtype="commits")
+
         # PGP Signature attributes: We have precise Key IDs used in signatures + details on signature creation time and algorithm
-        unique_pgp_pka = set(attribute.get('pgp_publicKeyAlgorithm') for attribute in signature_attributes if attribute.get('pgp_pulicKeyAlgorithm') is not None)
+        unique_pgp_pka = set(attribute.get('pgp_publicKeyAlgorithm') for attribute in signature_attributes if attribute.get('pgp_publicKeyAlgorithm') is not None)
         unique_pgp_st = set(attribute.get('pgp_sig_type') for attribute in signature_attributes if attribute.get('pgp_sig_type') is not None)
         unique_pgp_ha = set(attribute.get('pgp_hashAlgorithm') for attribute in signature_attributes if attribute.get('pgp_hashAlgorithm') is not None)
         unique_pgp_sct = set(attribute.get('pgp_signature_creation_time') for attribute in signature_attributes if attribute.get('pgp_signature_creation_time') is not None)
@@ -285,10 +587,10 @@ def run(gx_context, gx_output, gh_api):
                 gx_output.c_log(f"Primary key name typed by user for key {primary_key_id}: [{primary_key.get('name')}]", rtype="user_input")
 
             for email in primary_key.get('emails'):
-                if email not in contributor_emails: 
+                if email.get('email') not in contributor_emails:
                     message = "(shows as Verified)" if email.get('verified') == True else "(shows as Not Verified)"
                     gx_output.c_log(f"[{email.get('email')}] {message} obtained from primary Key with ID {primary_key_id}", rtype="emails")
-                    contributor_emails.append(email)
+                    contributor_emails.append(email.get('email'))
                     # There's a Verified: False or True field, we link it disregarding if its verified.
                     gx_context.linkIdentifier("EMAIL", [email['email']], contributor_login)
  
