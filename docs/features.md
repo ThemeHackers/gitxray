@@ -60,6 +60,26 @@ An outformat of type `text` can help in this specific use-case more than the def
 
 `gitxray` provides a summary of contributor commit hours, allowing you to profile contributor activity and detect potential anomalies. This feature helps you understand typical patterns and flag unusual behavior for further investigation.
 
+## Commit Pattern Analysis & Timezone Inference &#127760;
+
+`gitxray` performs an analysis of commit patterns to detect anomalies and infer contributor behavior such as:
+
+* **Bot & Automated Activity Detection**: Identifies potential automated or bot activity by analyzing commit distribution across hours of the day. If commits are spread across 22+ different hours (nearly 24/7 activity), this unusual pattern is flagged for review.
+
+* **Work Hours vs. Outside Work Hours Patterns**: Analyzes whether commits primarily occur during weekdays (Mon-Fri) or weekends, helping identify different contributor work patterns and potential coordination across accounts.
+
+* **Timezone Inference**: `gitxray` can infer timezones from contributor profile locations (if they were announced by the GitHub account), supporting 190+ countries and cities worldwide. When a timezone is successfully inferred:
+
+> **Location Mismatch Detection**: Flags suspicious patterns such as commits occurring primarily during night-time hours in the inferred timezone, which may indicate that the profile location doesn't match the actual timezone or that the contributor works unusual hours.
+
+> **Coordinated Timing Patterns**: Cross-references inferred timezones and primary active hours across accounts to identify coordinated activity.
+
+All temporal analysis findings appear under the `commits` category for individual contributors and the `association` category when patterns are shared across accounts. Focus on these findings with:
+
+```
+gitxray -r https://github.com/SampleOrg/SampleRepo -f commits,association
+```
+
 ## Untrustworthy Repositories and Activity &#127988;
 
 `gitxray` can be used to protect yourself, your team and your customers from fake Repositories and suspicious activity. For example, by analyzing commit dates and comparing them to the account creation timestamp of contributors, `gitxray` can flag inconsistencies that may indicate:
