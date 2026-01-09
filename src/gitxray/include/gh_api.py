@@ -270,4 +270,4 @@ class GitHubRESTAPI:
         return self.github_request_json(contributor_obj.get('events_url').replace("{/privacy}", ""))
 
     def search_repositories_by_name(self, name, limit):
-        return self.github_request_json(f"{self.GITHUB_API_BASE_URL}/search/repositories", {'q':name, 'type':'repositories','s':'stars','o':'desc'}, limit_results=limit)
+        return self.github_request_json(f"{self.GITHUB_API_BASE_URL}/search/repositories", {'q':f'"{name}" in:name', 'sort':'stars', 'order':'desc'}, limit_results=limit)
