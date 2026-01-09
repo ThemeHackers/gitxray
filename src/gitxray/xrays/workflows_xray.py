@@ -38,10 +38,10 @@ def run(gx_context, gx_output, gh_api):
                 for actor, actor_runs in run_actors.items():
                     percentage_runs = (actor_runs / total_runs) * 100
                     if gx_context.isContributor(actor):
-                        run_contributors[actor] += 1
+                        run_contributors[actor] += actor_runs
                         message = f"Contributor [{actor}] ran {actor_runs} [{percentage_runs:.2f}%] times workflow [{workflow.get('name')}] - See them at: [{repository.get('html_url')}/actions?query=actor%3A{actor}]"
                     else:
-                        run_non_contributors[actor] += 1
+                        run_non_contributors[actor] += actor_runs
                         message = f"{actor} is NOT a contributor and ran {actor_runs} [{percentage_runs:.2f}%] times workflow [{workflow.get('name')}] - See them at: [{repository.get('html_url')}/actions?query=actor%3A{actor}]"
 
                     gx_output.c_log(message, rtype="workflows", contributor=actor)
@@ -71,7 +71,7 @@ def run(gx_context, gx_output, gh_api):
                     gx_output.r_log(f"WARNING: Workflow [{workflow.get('name')}] may be triggered by an event that might be misused by attackers. See more at https://gitxray.com/vulnerable_workflows", rtype="workflows")
 
                 #https://github.com/actions/toolkit/issues/641
-                if "ACTIONS_ALLOW_UNSECURE_COMMANDS: true" in decoded_content: gx_output.r_log(f"WARNING: Workflow [{workflow.get('name')}] sets ACTIONS_ALLOW_UNSECURE_COMMANDS.", rtype="workflows")
+                if "actions_allow_unsecure_commands: true" in decoded_content: gx_output.r_log(f"WARNING: Workflow [{workflow.get('name')}] sets ACTIONS_ALLOW_UNSECURE_COMMANDS.", rtype="workflows")
 
                 if "secrets." in decoded_content: 
                     secrets = re.findall(r"secrets\.[A-Za-z-_0-9]*", decoded_content) 
