@@ -169,11 +169,6 @@ def log_events(events, gx_output, for_repository=False):
                 summary_message += f"users {action} Issues {count} times."
             else:
                 summary_message += f"the user {action} Issues on a repository {count} times."
-        elif etype == "IssuesEvent":
-            if for_repository:
-                summary_message += f"users were {action} as collaborators of the repository {count} times."
-            else:
-                summary_message += f"the user {action} other users as collaborators to repositories {count} times."
         elif etype == "CommitCommentEvent":
             if for_repository:
                 summary_message += f"users created comments in commits {count} times."
