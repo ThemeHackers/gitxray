@@ -1,5 +1,16 @@
 # Changelog
 
+## Release v1.0.20 (January 9th, 2026)
+* Added commit co-author analysis feature that parses `Co-authored-by:` trailers in commit messages to collect more emails. We also check if those co-authors are shared between commits of different accounts.
+* Added a pattern analysis to detect automated/bot activity (we warn if there are commits across more than 22 of the hours of the day), identify commits during work hours vs outside work hours (weekday/weekend patterns), infer timezones from 190+ countries/cities worldwide, convert UTC commit hours to local time for timezone-aware analysis that flags night-time activity or location mismatches, and finally we also identify coordinated timing across accounts.
+* Fixed duplicate entries in HTML report highlights section by deduplicating warnings before rendering.
+* Fixed similar repository name search to use exact name matching instead of partial/fuzzy search, and corrected API sort parameters from 's'/'o' to 'sort'/'order' to properly sort by stars, preventing false warnings about repository rating.
+* Fixed typo in contributors_xray.py where `pgp_pulicKeyAlgorithm` should have been `pgp_publicKeyAlgorithm`, preventing PGP public key algorithms from being collected from signature attributes.
+* Fixed timezone handling in gh_time.py to ensure all parsed GitHub timestamps are timezone-aware (UTC), preventing "can't subtract offset-naive and offset-aware datetimes" errors.
+* Fixed workflow run count calculation in workflows_xray.py where contributor/non-contributor run counts were incremented by 1 instead of the actual number of runs, causing incorrect totals in summary output.
+* Fixed case sensitivity bug in workflows_xray.py where check for `ACTIONS_ALLOW_UNSECURE_COMMANDS` was uppercase but content was lowercased, causing the check to never match.
+* Fixed type inconsistency in contributors_xray.py where primary key email dict objects were appended to contributor_emails list instead of email strings, breaking duplicate detection and anonymous user matching.
+
 ## Release v1.0.19 (December 6th, 2025)
 * Fix by @ThemeHackers merged; slight change to fix a TypeError in gh_public_events for missing commits.
 * Fix to missing commits when filtering by author for very specific cases. The GitHub REST API behaves strangely and sometimes filtering by author only works if its an email.
