@@ -318,7 +318,8 @@ class Output:
             more_sections += table_html
 
 
-        # We now have all highlights under highlights_rows; let's fill the highlights table and section of the report
+        # We now have all highlights under highlights_rows; deduplicate and fill the highlights table
+        highlights_rows = list(dict.fromkeys(highlights_rows))  # Remove duplicates while preserving order
         if len(highlights_rows) > 0:
             highlights_section = templates['table'].replace("{{table_rows}}", "".join(highlights_rows)).replace("{{table_title}}", "Highlights").replace("{{table_id}}", "highlights").replace("{{table_description}}", "")
         else: highlights_section = "<br/><h5>No results were highlighted by Gitxray.</h5>"
