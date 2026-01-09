@@ -24,6 +24,23 @@ def run(gx_context, gx_output, gh_api):
             msg = f"Exact same Comment field extracted from a Key for accounts: {affected_accounts}: {colValue}."
         elif colType == "EMAIL":
             msg = f"Email {colValue} shared by accounts: {affected_accounts}."
+        elif colType == "COAUTHOR_EMAIL":
+            msg = f"Co-author email [{colValue}] appears in commits by: {affected_accounts}."
+        elif colType == "COAUTHOR_NAME":
+            msg = f"Co-author name [{colValue}] appears in commits by: {affected_accounts}."
+        elif colType == "COAUTHOR_PAIR":
+            msg = f"Shared co-authorship relationship: {colValue.replace('+', ' & ')} appears across commits by: {affected_accounts}."
+        elif colType == "PRIMARY_ACTIVE_HOURS":
+            msg = f"Primary active hours [{colValue}] shared by accounts: {affected_accounts} - suggests coordinated activity or same operator."
+        elif colType == "COMMIT_PATTERN":
+            if colValue == "weekend_focused":
+                msg = f"Weekend-focused commit pattern shared by accounts: {affected_accounts} (commits outside typical work days)."
+            elif colValue == "weekday_focused":
+                msg = f"Weekday-focused commit pattern shared by accounts: {affected_accounts} (commits during typical work days)."
+        elif colType == "INFERRED_TIMEZONE":
+            msg = f"Inferred timezone [{colValue}] shared by accounts: {affected_accounts}."
+        elif colType == "SUSPICIOUS_24_7_ACTIVITY":
+            msg = f"WARNING: Unusual commit distribution detected for accounts: {affected_accounts} - commits spread across {colValue} different hours of the day (potential automated activity)."
         elif colType == "DAYS_SINCE_CREATION":
             msg = f"The following contributor accounts were created in the same day, precisely {colValue} days ago: {affected_accounts}."
         elif colType == "DAYS_SINCE_UPDATED" :
