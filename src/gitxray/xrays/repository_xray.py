@@ -15,7 +15,7 @@ def run(gx_context, gx_output, gh_api):
     similar_names = gh_api.search_repositories_by_name(repository.get('name'), limit=10)
     if similar_names != None and similar_names.get('total_count') != None and similar_names.get('total_count') > 0:
         most_rated = similar_names.get('items')[0]
-        search_url = f"https://github.com/search?q={repository.get('name')}%20in:name&type=repositories&s=stars&o=desc"
+        search_url = f"https://github.com/search?q=%22{repository.get('name')}%22%20in:name&type=repositories&s=stars&o=desc"
         if most_rated.get('full_name') == repository.get('full_name'):
             reponame_msg = f"This is the highest rating repository with name [{repository.get('name')}]"
         else:
